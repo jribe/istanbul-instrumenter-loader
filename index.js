@@ -29,7 +29,7 @@ module.exports = function(source, inputSourceMap) {
     var that = this;
     return instrumenter.instrument(source, this.resourcePath, function (error, source) {
         var outputSourceMap;
-        if (userOptions.noInputSourceMap && this.sourceMap) {
+        if (userOptions.noInputSourceMap && that.sourceMap) {
           outputSourceMap = concatenateSourceMaps([instrumenter.lastSourceMap(), inputSourceMap]);
         } else {
           outputSourceMap = instrumenter.lastSourceMap();
