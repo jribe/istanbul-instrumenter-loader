@@ -3,17 +3,9 @@
 var istanbulLibInstrument = require('istanbul-lib-instrument');
 var loaderUtils = require('loader-utils');
 var assign = require('object-assign');
-var sourceMap = require('source-map');
-
-function concatenateSourceMaps(sourceMaps) {
-  var firstMap = new sourceMap.SourceMapConsumer(sourceMaps[0]);
-  var generator = sourceMap.SourceMapGenerator.fromSourceMap(firstMap);
-  for (var i = 1; i < sourceMaps.length; i++) {
-    var nextMap = new sourceMap.SourceMapConsumer(sourceMaps[i]);
-    generator.applySourceMap(nextMap);
-  }
-  return generator.toJSON();
-}
+var path = require('path');
+var fs = require('fs-extra');
+var clone = require('clone');
 
 module.exports = function(source, inputSourceMap) {
     var userOptions = loaderUtils.parseQuery(this.query);
@@ -25,15 +17,34 @@ module.exports = function(source, inputSourceMap) {
         this.cacheable();
     }
 
-    var instrumenterSourceMap = userOptions.noInputSourceMap ? undefined : inputSourceMap;
+    var localSourceMap = clone(inputSourceMap);
+    var resourcePath = this.resourcePath;
+    if (userOptions.inputCacheDirectory !== undefined) {
+      var inputCacheDirectory = path.resolve(userOptions.inputCacheDirectory);
+      var cacheSourceFilename = path.resolve(path.join(inputCacheDirectory, this.resourcePath));
+      var cacheSource = source;
+
+      fs.ensureDirSync(path.dirname(cacheSourceFilename));
+      if (this.sourceMap) {
+        var cacheSourceMapFilename = `${cacheSourceFilename}.map`
+        localSourceMap.file = cacheSourceFilename;
+
+        fs.writeJsonSync(cacheSourceMapFilename, localSourceMap);
+        cacheSource = cacheSource + `//# sourceMappingURL=${path.basename(cacheSourceMapFilename)}\n`;
+      }
+      fs.writeFileSync(cacheSourceFilename, cacheSource);
+      resourcePath = cacheSourceFilename;
+    }
+
     var that = this;
-    return instrumenter.instrument(source, this.resourcePath, function (error, source) {
-        var outputSourceMap;
-        if (userOptions.noInputSourceMap && that.sourceMap) {
-          outputSourceMap = concatenateSourceMaps([instrumenter.lastSourceMap(), inputSourceMap]);
-        } else {
-          outputSourceMap = instrumenter.lastSourceMap();
+    return instrumenter.instrument(source, resourcePath, function (error, source) {
+        var outputSourceMap = instrumenter.lastSourceMap();
+        if (userOptions.inputCacheDirectory !== undefined && that.sourceMap) {
+          outputSourceMap.file = that.resourcePath;
+          outputSourceMap.sources = [
+            that.resourcePath
+          ];
         }
         that.callback(error, source, outputSourceMap);
-    }, instrumenterSourceMap);
+    }, localSourceMap);
 };
