@@ -17,7 +17,6 @@ module.exports = function(source, inputSourceMap) {
         this.cacheable();
     }
 
-    var localSourceMap = clone(inputSourceMap);
     var resourcePath = this.resourcePath;
     if (userOptions.inputCacheDirectory !== undefined) {
       var inputCacheDirectory = path.resolve(userOptions.inputCacheDirectory);
@@ -26,10 +25,11 @@ module.exports = function(source, inputSourceMap) {
 
       fs.ensureDirSync(path.dirname(cacheSourceFilename));
       if (this.sourceMap) {
-        var cacheSourceMapFilename = `${cacheSourceFilename}.map`
-        localSourceMap.file = cacheSourceFilename;
+        var cacheSourceMapFilename = `${cacheSourceFilename}.map`;
+        var cacheSourceMap = clone(inputSourceMap);
+        cacheSourceMap.file = cacheSourceFilename;
 
-        fs.writeJsonSync(cacheSourceMapFilename, localSourceMap);
+        fs.writeJsonSync(cacheSourceMapFilename, cacheSourceMap);
         cacheSource = cacheSource + `//# sourceMappingURL=${path.basename(cacheSourceMapFilename)}\n`;
       }
       fs.writeFileSync(cacheSourceFilename, cacheSource);
@@ -38,13 +38,6 @@ module.exports = function(source, inputSourceMap) {
 
     var that = this;
     return instrumenter.instrument(source, resourcePath, function (error, source) {
-        var outputSourceMap = instrumenter.lastSourceMap();
-        if (userOptions.inputCacheDirectory !== undefined && that.sourceMap) {
-          outputSourceMap.file = that.resourcePath;
-          outputSourceMap.sources = [
-            that.resourcePath
-          ];
-        }
-        that.callback(error, source, outputSourceMap);
-    }, localSourceMap);
+        that.callback(error, source, instrumenter.lastSourceMap());
+    }, inputSourceMap);
 };
